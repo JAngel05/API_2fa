@@ -1,11 +1,14 @@
 import secrets
 import csv
 import io
+from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from fastapi.security import APIKeyHeader
 from sqlmodel import Session, select
 from Config.db import get_Session
-from Models.models import Usuarios, Tokens, ProveedoresAPI, Numeraciones
+from Models.models import Usuarios, Tokens, ProveedoresAPI, Numeraciones, Usuarios, TwoFactorCodes
+from Utils import securityUtil
+from Services import recaptchaService
 
 
 router = APIRouter(prefix = "/auth", tags = ["Login"])
@@ -318,3 +321,53 @@ async def actualizar_bd( file: UploadFile = File(...), session: Session = Depend
     except Exception as e:
         session.rollback()
         raise HTTPException(status_code=500, detail=f"Error al procesar el CSV: {str(e)}")
+    
+
+router = APIRouter(prefix="/auth", tags=["Login 2FA"])
+
+# Esquema para recibir los datos del front
+class GenerateOTPRequest(BaseModel):
+    username: str
+    password: str
+    captchaToken: str
+
+@router.post("/generate")
+async def generate_otp(credentials: GenerateOTPRequest, session: Session = Depends(get_Session)):
+    
+    # 1. Validar que no sea un bot
+    is_human = await recaptchaService.verify(credentials.captchaToken)
+    if not is_human:
+        raise HTTPException(status_code=400, detail="Validación de reCAPTCHA fallida.")
+
+    # 2. Validar credenciales
+    statement = select(Usuarios).where(Usuarios.username == credentials.username)
+    user_db = session.exec(statement).first()
+
+    if not user_db or user_db.password != credentials.password:
+        raise HTTPException(status_code=401, detail="Usuario o contraseña incorrecta.")
+
+    # 3. Generar código y hashearlo
+    plain_otp = securityUtil.generate_otp(user_db.otp_length, user_db.otp_type)
+    hashed_otp = securityUtil.hash_code(plain_otp)
+
+    # 4. Invalidar códigos viejos
+    old_codes_stmt = select(TwoFactorCodes).where(
+        TwoFactorCodes.usuario_id == user_db.id, 
+        TwoFactorCodes.is_used == False
+    )
+    for code in session.exec(old_codes_stmt).all():
+        code.is_used = True
+
+    # 5. Guardar nuevo código
+    nuevo_codigo = TwoFactorCodes(usuario_id=user_db.id, hashed_code=hashed_otp)
+    session.add(nuevo_codigo)
+    session.commit()
+
+    # (Aquí iría el envío real del correo/SMS en el futuro)
+    print(f"DEBUG - Código OTP (No mostrar en prod): {plain_otp}") 
+
+    # 6. Devolver la pista
+    return {
+        "mensaje": "Código de verificación generado y enviado.",
+        "destinator_hint": securityUtil.mask_email(user_db.email)
+    }
