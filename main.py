@@ -1,7 +1,8 @@
 from fastapi import FastAPI
 from Config.db import engine
 from sqlmodel import SQLModel
-from routers import telefono, auth
+import Models
+from Routers import telefono, auth
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
@@ -13,7 +14,6 @@ def Inicio():
 
 app.add_middleware( CORSMiddleware, allow_origins=["*"], allow_credentials = True, allow_methods = ["*"], allow_headers = ["*",])
 
-app.include_router(telefono.router)
 app.include_router(auth.router)
 
 @app.get("/", tags = ["Frontend"])

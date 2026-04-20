@@ -7,7 +7,7 @@ from fastapi import Depends
 
 load_dotenv()
 
-DATABASE_URL = os.getenv("DATABASE_URL") #Modificar el url
+DATABASE_URL = os.getenv("DATABASE_URL") 
 if not DATABASE_URL:
     raise ValueError("No se encontró DATABASE_URL en el archivo .env")
 
