@@ -8,7 +8,7 @@ from sqlmodel import Session, select
 from Config.db import get_Session
 from Models.models import Usuarios, Tokens, ProveedoresAPI, Numeraciones, Usuarios, TwoFactorCodes
 from Utils import securityUtil
-from Services import recaptchaService
+from Services import recaptchaService, authService
 
 
 router = APIRouter(prefix = "/auth", tags = ["Login"])
@@ -371,3 +371,14 @@ async def generate_otp(credentials: GenerateOTPRequest, session: Session = Depen
         "mensaje": "Código de verificación generado y enviado.",
         "destinator_hint": securityUtil.mask_email(user_db.email)
     }
+
+class VerifyOTPRequest(BaseModel):
+    user_id: int  # Usamos user_id porque así lo pide la documentación del POST
+    otp_code: str
+
+@router.post("/2fa/verify")
+async def verify_otp(request: VerifyOTPRequest, session: Session = Depends(get_Session)):
+    # Pasamos el user_id de la petición al servicio
+    result = authService.verify_2fa_code(session, request.user_id, request.otp_code)
+    
+    return result

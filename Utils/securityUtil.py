@@ -2,6 +2,7 @@
 import hashlib
 import secrets
 import string
+import hmac
 
 def hash_code(code: str) -> str:
     """Hashea el código para guardarlo seguro."""
@@ -25,3 +26,12 @@ def generate_otp(length: int, otp_type: str) -> str:
         alphabet = string.ascii_letters + string.digits
         return ''.join(secrets.choice(alphabet) for _ in range(length))
     return ''.join(secrets.choice(string.digits) for _ in range(length))
+
+
+def verify_otp_hash(plain_code: str, hashed_code_db: str) -> bool:
+    """Verifica que el código ingresado coincida con el hash de la BD de forma segura."""
+    # Reutilizamos la función hash_code de tu compañero
+    incoming_hash = hash_code(plain_code) 
+    
+    # compare_digest evita ataques de tiempo
+    return hmac.compare_digest(incoming_hash, hashed_code_db)
